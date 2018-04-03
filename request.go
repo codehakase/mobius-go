@@ -1,7 +1,6 @@
 package mobius
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,7 +8,15 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 )
+
+type InvalidResponseErr struct {
+	Expect []int
+	Got    int
+	URL    string
+	Data   []byte
+}
 
 type httpRequest struct {
 	Client      *http.Client
@@ -33,6 +40,15 @@ type pair struct {
 // expected denotes an expected list of known-good HTTP codes returned from the Mobius API
 var expected = []int{202, 200}
 
+// String formats the error message
+func (e *InvalidResponseErr) String() string {
+	return fmt.Sprintf("\nInvalidResponseError: Details\n URL=%s \nExpectedOneOf=%#v \nGot=%d \nError: %s", e.URL, e.Expect, e.Got, string(e.Data))
+}
+
+// Error makes the struct implement the error interface
+func (e *InvalidResponseErr) Error() string {
+	return e.String()
+}
 func newRequest(url string, m *Mobiusimpl) *httpRequest {
 	return &httpRequest{URL: url, Client: http.DefaultClient, mx: m}
 }
@@ -53,6 +69,7 @@ func (r *httpRequest) postRequest(payload interface{}) (*httpResponse, error) {
 }
 
 func (r *httpResponse) parseFromJSON(v interface{}) error {
+	log.Println("unmarshaling: ", string(r.Data))
 	return json.Unmarshal(r.Data, v)
 }
 
@@ -65,7 +82,7 @@ func getJSONResponse(r *httpRequest, v interface{}) error {
 		return err
 	}
 	if !resOK(resp.Code) {
-		return fmt.Errorf("request failed with a %d code", resp.Code)
+		return withErr(r.URL, expected, resp)
 	}
 	log.Print("get data: ", string(resp.Data))
 	return resp.parseFromJSON(v)
@@ -79,9 +96,7 @@ func postResponseFromJSON(r *httpRequest, payload interface{}, v interface{}) er
 		return err
 	}
 	if !resOK(resp.Code) {
-		var d interface{}
-		resp.parseFromJSON(&d)
-		return fmt.Errorf("request failed with a %d code, and resp data: %v", resp.Code, d)
+		return withErr(r.URL, expected, resp)
 	}
 
 	return resp.parseFromJSON(v)
@@ -95,24 +110,18 @@ func (r *httpRequest) makeRequest(method string, payload interface{}) (*httpResp
 
 	url.RawQuery = r.QueryValues.Encode()
 
-	var buffer io.ReadWriter
+	var buffer io.Reader
 	if payload != nil {
-		buffer = new(bytes.Buffer)
-		err := json.NewEncoder(buffer).Encode(payload)
-		if err != nil {
-			return nil, err
-		}
+		buffer = strings.NewReader(payload.(string))
 	} else {
 		buffer = nil
 	}
-
-	log.Printf("sending %s request to %s", method, url.String())
 
 	req, err := http.NewRequest(method, url.String(), buffer)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Add("x-api-key", r.mx.APIKey)
+	req.Header.Set("x-api-key", r.mx.APIKey)
 	// Add any other headers
 	for header, value := range r.Headers {
 		req.Header.Add(header, value)
@@ -142,4 +151,14 @@ func resOK(code int) bool {
 		}
 	}
 	return false
+}
+
+// withErr creates a new error with specified conditions
+func withErr(url string, expect []int, resp *httpResponse) error {
+	return &InvalidResponseErr{
+		URL:    url,
+		Expect: expect,
+		Got:    resp.Code,
+		Data:   resp.Data,
+	}
 }

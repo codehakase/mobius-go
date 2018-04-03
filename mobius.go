@@ -1,15 +1,3 @@
-// The mobius-go package provides methods for interacting with the Mobius Network API.
-// It automates the HTTP request/response cycle, encodings, and other details needed by the API.
-// This SDK lets you do everything the API lets you, in a more Go-friendly way.
-//
-// For further information please see the Official Mobius API documentation at
-// https://mobius.network/docs/
-//
-//  Original Author: Francis Sunday <twitter.com/codehakase>
-//
-// Examples
-//
-
 package mobius
 
 import (
@@ -19,7 +7,10 @@ import (
 	"os"
 )
 
-var Debug = false
+var (
+	Debug   = false
+	Version = "0.0.1"
+)
 
 const (
 	// MobiusGoUserAgent identifies the client to the server
@@ -67,6 +58,7 @@ func New(apikey, appuid string) *Mobius {
 	m := Mobius{
 		Ctx:      &mip,
 		AppStore: &AppStore{mx: &mip},
+		Token:    &Token{mx: &mip},
 	}
 	return &m
 }
@@ -92,16 +84,17 @@ func NewFromEnv() (*Mobius, error) {
 	m := Mobius{
 		Ctx:      &mip,
 		AppStore: &AppStore{mx: &mip},
+		Token:    &Token{mx: &mip},
 	}
 	return &m, nil
+}
+
+// GetVersion returns current version of SDK
+func (m Mobius) GetVersion() string {
+	return Version
 }
 
 // generateApiUrl renders a URL for an API endpoint using the api base, and the endpoint
 func generateApiUrl(m *Mobiusimpl, endpoint string) string {
 	return fmt.Sprintf("%s/%s", m.APIBase, endpoint)
 }
-
-// func testt() {
-// 	mob := New("xxx", "xx")
-// 	mob.Ctx.Req.addHeader("hello", "hi")
-// }
