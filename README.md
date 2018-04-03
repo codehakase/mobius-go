@@ -28,7 +28,7 @@ func main() {
   appStore := mc.AppStore
 
   // Get a user's balance
-  myBalance, err := appStore.Balance("myemail@example.com")
+  usrBal, err := appStore.Balance("myemail@example.com")
   if err != nil {
     log.Fatalf("can't fetch user's balance, err: %+v", err)
     return
